@@ -6,9 +6,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Serve static files (including chat.html) from the project root
-app.use(express.static(process.cwd()));
-
 app.get('/', (req, res) => {
   console.log('Server root URL accessed');
 });

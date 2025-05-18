@@ -1,52 +1,78 @@
-import { tracesMock, logsMock, metricsMock } from './mockData.js';
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
+import { tools, availableTools } from './tools.js';
 dotenv.config();
-
+ 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY, // put your API key here or in environment variables
+  apiKey: process.env.OPENAI_API_KEY,
+  dangerouslyAllowBrowser: true,
 });
 
-// Agent 1: mocks the request to endpoints and filters relevant info
-export async function agent1(question) {
-  // Simulate query delay with Promise
-  await new Promise(resolve => setTimeout(resolve, 300));
+const messages = [
+  {
+    role: "assistant",
+    content:
+      "You are a helpful telemetry assistant. Only use the functions you have been provided with. If the question is not related to the functions, respond with 'I cannot help with that.'",
+  },
+];
 
-  // Simple filtering to show example
-  const relevantData = {
-    traces: tracesMock,
-    logs: logsMock,
-    metrics: metricsMock
-  };
-
-  return relevantData;
-}
-
-// Agent 2: generates answer using GPT with info from agent 1
-export async function agent2(question, data) {
-  const prompt = `
-    You are a telemetry expert assistant that answers questions about a microservice.
-
-    Question: ${question}
-
-    These are the relevant data from the microservice:
-    ${JSON.stringify(data, null, 2)}
-
-    Respond clearly and in natural language.
-    `;
-    
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    store: true,
-    messages: [{ role: 'user', content: prompt }],
+async function agent(userInput) {
+  messages.push({
+    role: "user",
+    content: userInput,
   });
 
-  return response.choices[0].message.content;
+  for (let i = 0; i < 5; i++) {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: messages,
+      tools: tools,
+    });
+
+    const { finish_reason, message } = response.choices[0];
+
+    if (finish_reason === "tool_calls" && message.tool_calls) {
+      console.log("Tool calls detected:", message.tool_calls);
+
+      const results = [];
+
+      for (const toolCall of message.tool_calls) {
+        const functionName = toolCall.function.name;
+        const functionToCall = availableTools[functionName];
+        const functionArgs = JSON.parse(toolCall.function.arguments);
+        const functionArgsArr = Object.values(functionArgs);
+
+        const functionResponse = await functionToCall.apply(null, functionArgsArr);
+        results.push({
+          name: functionName,
+          response: functionResponse,
+        });
+      }
+
+      const resultMessage = results.map(
+        ({ name, response }) =>
+          `Result from "${name}":\n${JSON.stringify(response, null, 2)}`
+      ).join("\n\n");
+
+      console.log("Function results:", resultMessage);
+
+      messages.push({
+        role: "function",
+        name: "multiple_tool_calls",
+        content: resultMessage,
+      });
+
+    } else if (finish_reason === "stop") {
+      messages.push(message);
+      return message;
+    }
+  }
+
+  return {content: "Se alcanzó el número máximo de iteraciones sin una respuesta adecuada. Intenta con una consulta más específica."};
 }
 
-// Orchestrator: runs both agents
 export async function answerQuestion(question) {
-  const data = await agent1(question);
-  const answer = await agent2(question, data);
-  return answer;
+  const response = await agent(question);
+  console.log("Response from agent:", response);
+  return response.content;
 }

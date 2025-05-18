@@ -18,9 +18,14 @@
   },
   "homepage": "https://github.com/JaviFdez7/telemetry-gpt#readme",
   "dependencies": {
+    "@ai-sdk/anthropic": "^1.2.11",
+    "@modelcontextprotocol/sdk": "^1.11.4",
+    "ai": "^4.3.16",
+    "child_process": "^1.0.2",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
-    "openai": "^4.98.0"
+    "openai": "^4.98.0",
+    "zod": "^3.24.4"
   }
 }
